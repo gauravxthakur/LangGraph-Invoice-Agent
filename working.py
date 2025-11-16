@@ -12,12 +12,22 @@ load_dotenv()
         
 # Define the State schema
 class State(TypedDict):
+    # Input
+    text: str
+    
+    # Extraction output
     company_name: str
     amount_paid: float
     product_name: str
     num_units: int
+    
+    # Status
     function_call_success: bool
     error_message: str
+    
+    # Database output
+    invoice_id: int
+    invoice_success: bool
 
 # Database setup
 DATABASE_FILE = "ledger_test.db"
@@ -175,5 +185,28 @@ def chat_interface():
             print(f"Error: {result['error_message']}")
         print("\n")
 
+# Create a graph
+workflow = StateGraph(State)
+
+# Add nodes to the graph
+workflow.add_node("extract_transaction_details", node_extract_transaction_details)
+workflow.add_node("create_invoice", node_create_invoice)
+workflow.add_node("END", lambda x: x)
+
+# Add edges to the graph
+workflow.set_entry_point("extract_transaction_details")
+workflow.add_edge("extract_transaction_details", "create_invoice")
+workflow.add_edge("create_invoice", "END")
+
+# Compile the graph
+graph = workflow.compile()
+
+# Draw the graph
+try:
+    graph.get_graph(xray=True).draw_mermaid_png(output_file_path="graph.png")
+except Exception:
+    pass
+
+# Run the flow
 if __name__ == "__main__":
     chat_interface()

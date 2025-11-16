@@ -12,12 +12,22 @@ load_dotenv()
         
 # Define the State schema
 class State(TypedDict):
+    # Input
+    text: str
+    
+    # Extraction output
     company_name: str
     amount_paid: float
     product_name: str
     num_units: int
+    
+    # Status
     function_call_success: bool
     error_message: str
+    
+    # Database output
+    invoice_id: int
+    invoice_success: bool
 
 # Database setup
 DATABASE_FILE = "ledger_test.db"
@@ -119,60 +129,68 @@ def display_ledger():
         cursor.execute("SELECT * FROM Ledger ORDER BY timestamp DESC")
         rows = cursor.fetchall()
         
-        print("\nCurrent Ledger:")
+        print("\n=== Current Ledger ===")
         print("ID | Company Name        | Amount Paid | Product   | Units | Timestamp")
-        print("-" * 70)
+        print("-" * 75)
         for row in rows:
             print(f"{row[0]:2} | {row[1]:<18} | ${row[2]:>9,.2f} | {row[3]:<8} | {row[4]:>5} | {row[5]}")
+        print("-" * 75)
     except sqlite3.Error as e:
         print(f"Error displaying ledger: {e}")
     finally:
-        conn.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
-# Set up chat interface
-def chat_interface():
+# Execute the LangGraph flow
+def run_graph_flow(graph, initial_state: State):
+    final_state = graph.invoke(initial_state)
+    return final_state
+
+def chat_interface(graph):
     # Initialize database
     setup_database()
     
-    print("Transaction Details Extractor - Type your transaction and press Enter")
+    print("\n================================================")
+    print(" Transaction Details Extractor ")
+    print("================================================")
     print("Example: 'Amazon paid $40000 for 5 GPUs'")
-    print("Type 'exit' to quit\n")
+    print("Type 'exit' or 'quit' to end the session.")
     
     while True:
-        user_input = input("You: ").strip()
+        user_input = input("\nYou: ").strip()
         if user_input.lower() in ('exit', 'quit'):
             break
             
-        # Process input through our extraction node
-        state = {
+        # 1. Initialize the State object with user input
+        initial_state: State = {
             "text": user_input,
             "company_name": "",
             "amount_paid": 0.0,
             "product_name": "",
             "num_units": 0,
             "function_call_success": False,
-            "error_message": ""
+            "error_message": "",
+            "invoice_id": 0,
+            "invoice_success": False
         }
         
-        result = node_extract_transaction_details(state)
+        # 2. Execute the entire LangGraph workflow
+        final_state = run_graph_flow(graph, initial_state)
         
-        print("\nExtracted Details:")
-        if result["function_call_success"]:
-            node_create_invoice(result)
-            print(f"Company: {result['company_name']}")
-            print(f"Amount Paid: ${result['amount_paid']:,.2f}")
-            print(f"Product: {result['product_name']}")
-            print(f"Units: {result['num_units']}")
-            print("\nJSON Output:")
-            print(json.dumps({
-                "company_name": result['company_name'],
-                "amount_paid": result['amount_paid'],
-                "product_name": result['product_name'],
-                "num_units": result['num_units']
-            }, indent=2))
+        # 3. Process and display the final result
+        print("\n--- Final Result ---")
+        if final_state["function_call_success"] and final_state["invoice_success"]:
+            print("SUCCESS: Transaction recorded.")
+            print(f"   Invoice ID: {final_state['invoice_id']}")
+            print(f"   Company: {final_state['company_name']}")
+            print(f"   Amount: ${final_state['amount_paid']:,.2f}")
+            print(f"   Product: {final_state['product_name']} ({final_state['num_units']} units)")
             display_ledger()
-        else:
-            print(f"Error: {result['error_message']}")
+        elif not final_state["function_call_success"]:
+             print(f"EXTRACTION FAILED: {final_state['error_message']}")
+        elif not final_state["invoice_success"]:
+             print(f"DATABASE FAILED: {final_state['error_message']}")
+        
         print("\n")
 
 # Create a graph
@@ -197,6 +215,6 @@ try:
 except Exception:
     pass
 
-# Run the flow
+# Run the system
 if __name__ == "__main__":
-    chat_interface()
+    chat_interface(graph)
