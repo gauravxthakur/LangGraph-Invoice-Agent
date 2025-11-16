@@ -1,0 +1,8 @@
+langchain-core>=1.0.4
+langchain-google-genai>=0.1.0
+langgraph>=0.1.0
+python-dotenv>=1.0.0
+colorama>=0.4.6
+# Optional for future PDF processing:
+# pdfplumber>=0.10.0
+# python-docx>=0.8.11

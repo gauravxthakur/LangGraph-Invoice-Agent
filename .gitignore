@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data files
+data/
+*.md
+
+# Generated files
+graph.png
+
+# API keys
+.env
+*.env
+
+# Database files
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
