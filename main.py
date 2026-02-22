@@ -16,7 +16,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 load_dotenv()
 
-      
+        
 # -----------------------------------STATE SCHEMA-------------------------------------------
 class AgentState(TypedDict):
     
@@ -46,7 +46,7 @@ class AgentState(TypedDict):
 # Database setup
 DATABASE_FILE = "ledger_test.db"
 
-def setup_database():
+async def setup_database():
     """Initializes the SQLite database and creates the Ledger table."""
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
@@ -70,7 +70,7 @@ llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
 
 # Extract transaction details
-def node_extract_transaction_details(state: State):
+async def node_extract_transaction_details(state: AgentState):
     ''' Extract transaction details '''
     prompt = PromptTemplate(
         input_variables = ["text"],
@@ -83,7 +83,8 @@ def node_extract_transaction_details(state: State):
     message = HumanMessage(content=prompt.format(text=state["text"]))
     
     try:
-        result = llm.invoke([message]).content.strip()
+        response = await llm.ainvoke([message])
+        result = response.content.strip()
         # Handle both ```json and ``` cases
         if result.startswith("```"):
             result = result.split("\n", 1)[1].rsplit("\n", 1)[0]
@@ -104,7 +105,7 @@ def node_extract_transaction_details(state: State):
     
     return state
 
-def node_create_invoice(state: AgentState):
+async def node_create_invoice(state: AgentState):
     '''Create invoice and store in database'''
     if not state.get("function_call_success", False):
         state["error_message"] = "Cannot create invoice - extraction failed"
@@ -156,13 +157,13 @@ def display_ledger():
             conn.close()
 
 # Execute the LangGraph flow
-def run_graph_flow(graph, initial_state: AgentState):
-    final_state = graph.invoke(initial_state)
+async def run_graph_flow(graph, initial_state: AgentState):
+    final_state = await graph.ainvoke(initial_state)
     return final_state
 
-def chat_interface(graph):
+async def chat_interface(graph):
     # Initialize database
-    setup_database()
+    await setup_database()
     
     print("\n================================================")
     print(" Transaction Details Extractor ")
@@ -176,20 +177,21 @@ def chat_interface(graph):
             break
             
         # 1. Initialize the State object with user input
-        initial_state: State = {
+        initial_state: AgentState = {
+            "messages": [HumanMessage(content=user_input)],
             "text": user_input,
             "company_name": "",
             "amount_paid": 0.0,
             "product_name": "",
             "num_units": 0,
-            "function_call_success": False,
-            "error_message": "",
-            "invoice_id": 0,
-            "invoice_success": False
+            "function_call_success": None,
+            "error_message": None,
+            "invoice_id": None,
+            "invoice_success": None,
         }
         
         # 2. Execute the entire LangGraph workflow
-        final_state = run_graph_flow(graph, initial_state)
+        final_state = await run_graph_flow(graph, initial_state)
         
         # 3. Process and display the final result
         print("\n--- Final Result ---")
@@ -231,4 +233,4 @@ except Exception:
 
 # Run the system
 if __name__ == "__main__":
-    chat_interface(graph)
+    asyncio.run(chat_interface(graph))
