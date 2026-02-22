@@ -1,18 +1,29 @@
+import asyncio
 import os
-import json # to parse the LLM output
-import sqlite3
-from typing import List, TypedDict #typedict for langgraph state
-from langchain_core.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage
-from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
+import json
+import sqlite3
+from typing import List, TypedDict, Annotated, Optional
+from langchain_core.messages import HumanMessage, AnyMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.graph.message import add_messages
+from langchain_core.prompts import PromptTemplate
+from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode, tools_condition
+from IPython.display import Image, display
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 load_dotenv()
-        
-# Define the State schema
-class State(TypedDict):
-    # Input
+
+      
+# -----------------------------------STATE SCHEMA-------------------------------------------
+class AgentState(TypedDict):
+    
+    # Conversation History
+    messages: Annotated[list[AnyMessage], add_messages]
+    
+    # Current Input
     text: str
     
     # Extraction output
@@ -22,12 +33,15 @@ class State(TypedDict):
     num_units: int
     
     # Status
-    function_call_success: bool
-    error_message: str
+    function_call_success: Optional[bool]
+    error_message: Optional[str]
     
     # Database output
-    invoice_id: int
-    invoice_success: bool
+    invoice_id: Optional[int]
+    invoice_success: Optional[bool]
+    
+#--------------------------------------------------------------------------------------------
+
 
 # Database setup
 DATABASE_FILE = "ledger_test.db"
@@ -90,7 +104,7 @@ def node_extract_transaction_details(state: State):
     
     return state
 
-def node_create_invoice(state: State):
+def node_create_invoice(state: AgentState):
     '''Create invoice and store in database'''
     if not state.get("function_call_success", False):
         state["error_message"] = "Cannot create invoice - extraction failed"
@@ -142,7 +156,7 @@ def display_ledger():
             conn.close()
 
 # Execute the LangGraph flow
-def run_graph_flow(graph, initial_state: State):
+def run_graph_flow(graph, initial_state: AgentState):
     final_state = graph.invoke(initial_state)
     return final_state
 
@@ -194,7 +208,7 @@ def chat_interface(graph):
         print("\n")
 
 # Create a graph
-workflow = StateGraph(State)
+workflow = StateGraph(AgentState)
 
 # Add nodes to the graph
 workflow.add_node("extract_transaction_details", node_extract_transaction_details)
