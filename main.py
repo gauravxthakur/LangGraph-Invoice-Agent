@@ -13,6 +13,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from IPython.display import Image, display
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from tools import DATABASE_FILE, setup_database, extract_transaction_details, create_invoice, get_ledger_data
 
 load_dotenv()
 
@@ -43,101 +44,13 @@ class AgentState(TypedDict):
 #--------------------------------------------------------------------------------------------
 
 
-# Database setup
-DATABASE_FILE = "ledger_test.db"
-
-async def setup_database():
-    """Initializes the SQLite database and creates the Ledger table."""
-    conn = sqlite3.connect(DATABASE_FILE)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Ledger (
-            id INTEGER PRIMARY KEY,
-            company_name TEXT NOT NULL,
-            amount_paid REAL NOT NULL,
-            product_name TEXT,
-            num_units INTEGER,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-    print(f"[DB SETUP] Database '{DATABASE_FILE}' initialized and 'Ledger' table ready.")    
-    
 # Initialise the LLM
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
+#--------------------------------------------------------------------------------------------
 
-# Extract transaction details
-async def node_extract_transaction_details(state: AgentState):
-    ''' Extract transaction details '''
-    prompt = PromptTemplate(
-        input_variables = ["text"],
-        template = """Extract these fields from {text} as JSON:
-- company_name (string) 
-- amount_paid (float)
-- product_name (string)
-- num_units (integer)"""
-    )
-    message = HumanMessage(content=prompt.format(text=state["text"]))
-    
-    try:
-        response = await llm.ainvoke([message])
-        result = response.content.strip()
-        # Handle both ```json and ``` cases
-        if result.startswith("```"):
-            result = result.split("\n", 1)[1].rsplit("\n", 1)[0]
-        data = json.loads(result)
-        
-        state["company_name"] = str(data.get("company_name", "")).strip()
-        state["amount_paid"] = float(data.get("amount_paid", 0.0)) 
-        state["product_name"] = str(data.get("product_name", "")).strip()
-        state["num_units"] = int(data.get("num_units", 0))
-        state["function_call_success"] = True
-        
-    except json.JSONDecodeError as e:
-        state["error_message"] = f"Invalid JSON: {e}"
-        state["function_call_success"] = False
-    except (KeyError, ValueError) as e: 
-        state["error_message"] = f"Data validation error: {e}"
-        state["function_call_success"] = False
-    
-    return state
-
-async def node_create_invoice(state: AgentState):
-    '''Create invoice and store in database'''
-    if not state.get("function_call_success", False):
-        state["error_message"] = "Cannot create invoice - extraction failed"
-        return state
-        
-    try:
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """
-            INSERT INTO Ledger (company_name, amount_paid, product_name, num_units)
-            VALUES (?, ?, ?, ?)
-            """,
-            (state["company_name"], state["amount_paid"], 
-             state["product_name"], state["num_units"])
-        )
-        conn.commit()
-        state["invoice_id"] = cursor.lastrowid
-        state["invoice_success"] = True
-        
-    except sqlite3.Error as e:
-        state["error_message"] = f"Database error: {e}"
-        state["invoice_success"] = False
-        
-    finally:
-        conn.close()
-        
-    return state
-
-def display_ledger():
-    """Display current ledger table"""
+def display_ledger(): 
+    """Print ledger table to console"""
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
