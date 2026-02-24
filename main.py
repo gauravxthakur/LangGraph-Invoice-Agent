@@ -51,7 +51,6 @@ llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
 #-------------------------------------TOOLS---------------------------------------------
 local_tools = [
-    setup_database,
     extract_transaction_details,
     create_invoice,
     get_ledger_data
@@ -157,7 +156,7 @@ async def assistant(state: AgentState):
     
     llm_with_tools = llm.bind_tools(local_tools)
     return{
-        "messages": llm_with_tools.invoke([sys_msg] + state["messages"]),
+        "messages": [llm_with_tools.invoke([sys_msg] + state["messages"])],
         "text": state["text"],
         "company_name": state["company_name"],
         "amount_paid": state["amount_paid"],
@@ -251,23 +250,12 @@ async def chat_interface(graph):
         
         # 3. Process and display the final result
         print("\n--- Final Result ---")
-        if final_state["function_call_success"] and final_state["invoice_success"]:
-            print("SUCCESS: Transaction recorded.")
-            print(f"   Invoice ID: {final_state['invoice_id']}")
-            print(f"   Company: {final_state['company_name']}")
-            print(f"   Amount: ${final_state['amount_paid']:,.2f}")
-            print(f"   Product: {final_state['product_name']} ({final_state['num_units']} units)")
-            print(f"   Timestamp: {final_state['timestamp']}")
-            display_ledger()
-        elif not final_state["function_call_success"]:
-             print(f"EXTRACTION FAILED: {final_state['error_message']}")
-        elif not final_state["invoice_success"]:
-             print(f"DATABASE FAILED: {final_state['error_message']}")
+        print(final_state["messages"][-1].content)
         
         print("\n")
-
-
-
+        
+        
+        
 #----------------------------------------RUN----------------------------------------------    
 if __name__ == "__main__":
     async def main():

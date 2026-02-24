@@ -20,8 +20,7 @@ DATABASE_FILE = "ledger_test.db"
 
 #------------------------------------------------------------------------------------------------------------
 
-@tool
-def setup_database():
+async def setup_database():
     """
     Initializes the SQLite database and creates the Ledger table for invoice storage.
     
@@ -50,9 +49,9 @@ def setup_database():
     conn.commit()
     conn.close()
     print(f"[DB SETUP] Database '{DATABASE_FILE}' initialized and 'Ledger' table ready.")    
+
     
-    
-    
+
 #--------------------------------------------------------------------------------------------------------------------
     
 @tool
@@ -69,37 +68,71 @@ async def extract_transaction_details(text: str) -> dict:
     """
 
     prompt = PromptTemplate(
-        input_variables = ["text"],
-        template = """Extract these fields from {text} as JSON:
-                    - company_name (string) 
-                    - amount_paid (float)
-                    - product_name (string)
-                    - num_units (integer)"""
-        )
-    message = HumanMessage(content=prompt.format(text=state["text"]))
-    
+        input_variables=["text"],
+        template=(
+            "Extract these fields from the input text as STRICT JSON (no commentary):\n"
+            "- company_name (string)\n"
+            "- amount_paid (float)\n"
+            "- product_name (string)\n"
+            "- num_units (integer)\n\n"
+            "Text: {text}"
+        ),
+    )
+    message = HumanMessage(content=prompt.format(text=text))
+
     try:
         response = await llm.ainvoke([message])
-        result = response.content.strip()
-        # Handle both ```json and ``` cases
+        result = str(response.content).strip()
+
+        # Handle fenced code blocks like ```json ... ``` or ``` ... ```
         if result.startswith("```"):
-            result = result.split("\n", 1)[1].rsplit("\n", 1)[0]
+            parts = result.split("\n", 1)
+            result = parts[1] if len(parts) > 1 else ""
+            result = result.rsplit("\n", 1)[0] if "\n" in result else result
+
         data = json.loads(result)
-        
-        state["company_name"] = str(data.get("company_name", "")).strip()
-        state["amount_paid"] = float(data.get("amount_paid", 0.0)) 
-        state["product_name"] = str(data.get("product_name", "")).strip()
-        state["num_units"] = int(data.get("num_units", 0))
-        state["function_call_success"] = True
-        
+
+        company_name = str(data.get("company_name", "")).strip()
+        product_name = str(data.get("product_name", "")).strip()
+
+        amount_raw = data.get("amount_paid", 0.0)
+        num_units_raw = data.get("num_units", 0)
+
+        amount_paid = float(amount_raw)
+        num_units = int(num_units_raw)
+
+        if not company_name:
+            raise ValueError("company_name is missing")
+
+        return {
+            "company_name": company_name,
+            "amount_paid": amount_paid,
+            "product_name": product_name,
+            "num_units": num_units,
+            "success": True,
+            "function_call_success": True,
+            "error_message": None,
+        }
     except json.JSONDecodeError as e:
-        state["error_message"] = f"Invalid JSON: {e}"
-        state["function_call_success"] = False
-    except (KeyError, ValueError) as e: 
-        state["error_message"] = f"Data validation error: {e}"
-        state["function_call_success"] = False
-    
-    return state
+        return {
+            "company_name": "",
+            "amount_paid": 0.0,
+            "product_name": "",
+            "num_units": 0,
+            "success": False,
+            "function_call_success": False,
+            "error_message": f"Invalid JSON from model: {e}",
+        }
+    except (ValueError, TypeError) as e:
+        return {
+            "company_name": "",
+            "amount_paid": 0.0,
+            "product_name": "",
+            "num_units": 0,
+            "success": False,
+            "function_call_success": False,
+            "error_message": f"Data validation error: {e}",
+        }
 
 
 #-------------------------------------------------------------------------------------------------
@@ -119,10 +152,6 @@ async def create_invoice(company_name: str, amount_paid: float,
     Returns:
         dict: {invoice_id: int, success: bool, error_message: str}
     """
-    if not state.get("function_call_success", False):
-        state["error_message"] = "Cannot create invoice - extraction failed"
-        return state
-        
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
@@ -132,21 +161,34 @@ async def create_invoice(company_name: str, amount_paid: float,
             INSERT INTO Ledger (company_name, amount_paid, product_name, num_units)
             VALUES (?, ?, ?, ?)
             """,
-            (state["company_name"], state["amount_paid"], 
-             state["product_name"], state["num_units"])
+            (company_name, float(amount_paid), product_name, int(num_units))
         )
         conn.commit()
-        state["invoice_id"] = cursor.lastrowid
-        state["invoice_success"] = True
+
+        invoice_id = cursor.lastrowid
+        cursor.execute("SELECT timestamp FROM Ledger WHERE id = ?", (invoice_id,))
+        ts_row = cursor.fetchone()
+        timestamp = ts_row[0] if ts_row else None
+
+        return {
+            "invoice_id": invoice_id,
+            "success": True,
+            "invoice_success": True,
+            "error_message": None,
+            "timestamp": timestamp,
+        }
         
     except sqlite3.Error as e:
-        state["error_message"] = f"Database error: {e}"
-        state["invoice_success"] = False
-        
+        return {
+            "invoice_id": None,
+            "success": False,
+            "invoice_success": False,
+            "error_message": f"Database error: {e}",
+            "timestamp": None,
+        }
     finally:
-        conn.close()
-        
-    return state
+        if 'conn' in locals() and conn:
+            conn.close()
 
 
 #----------------------------------------------------------------------------------------------
@@ -168,6 +210,7 @@ def get_ledger_data():
     """
     try:
         conn = sqlite3.connect(DATABASE_FILE)
+
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM Ledger ORDER BY timestamp DESC")
         rows = cursor.fetchall()
@@ -179,6 +222,8 @@ def get_ledger_data():
         for row in rows:
             ledger_str += f"{row[0]:2} | {row[1]:<18} | ${row[2]:>9,.2f} | {row[3]:<8} | {row[4]:>5} | {row[5]}\n"
         ledger_str += "-" * 75 + "\n"
+
+        print(ledger_str)
         
         return ledger_str
     except sqlite3.Error as e:
