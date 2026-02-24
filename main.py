@@ -47,7 +47,151 @@ class AgentState(TypedDict):
 # Initialise the LLM
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
-#--------------------------------------------------------------------------------------------
+
+
+#-------------------------------------TOOLS---------------------------------------------
+local_tools = [
+    setup_database,
+    extract_transaction_details,
+    create_invoice,
+    get_ledger_data
+]
+
+
+#------------------------------------AI ASSISTANT---------------------------------------
+async def assistant(state: AgentState):
+    
+    textual_description_of_tools = """
+    def setup_database():
+    
+    Initializes the SQLite database and creates the Ledger table for invoice storage.
+    
+    Creates a table with columns: id, company_name, amount_paid, product_name, 
+    num_units, and timestamp. Uses 'ledger_test.db' as the database file.
+    
+    Returns:
+        None: Prints setup confirmation message
+    
+    Note:
+        Table is created with IF NOT EXISTS to prevent errors on repeated calls.
+    
+    
+    -----------------------------------------------------------------------------------
+    
+    async def extract_transaction_details(text: str) -> dict:
+    Extracts transaction details from natural language text using a LLM.
+    
+    Args:
+        text (str): Natural language text to parse
+        
+    Returns:
+        dict: Extracted data with keys: company_name, amount_paid, 
+              product_name, num_units, success, error_message
+              
+    -----------------------------------------------------------------------------------
+    
+    async def create_invoice(company_name: str, amount_paid: float, 
+                         product_name: str, num_units: int) -> dict:
+    Creates and stores invoice record in SQLite database.
+    
+    Args:
+        company_name (str): Company name
+        amount_paid (float): Payment amount
+        product_name (str): Product description
+        num_units (int): Quantity purchased
+        
+    Returns: 
+    dict: {invoice_id: int, success: bool, error_message: str}
+        
+    -----------------------------------------------------------------------------------
+    def get_ledger_data(): 
+    Retrieves and formats all invoice records from the database.
+    
+    Queries the Ledger table and returns a formatted string containing
+    all transaction records sorted by timestamp (newest first).
+    
+    Returns:
+        str: Formatted ledger table with ID, company name, amount,
+             product, units, and timestamp for all records
+             
+    Note:
+        Prints formatted table directly to console for user display.
+    
+    """
+
+    sys_msg = SystemMessage(content=f"""
+    You are an intelligent Invoice Processing Assistant that helps users extract transaction details
+    from natural language and store them in a database,
+    with the help of following tools: {textual_description_of_tools}
+
+    Your Workflow:
+    1. When user provides transaction text, use extract_transaction_details() to parse it
+    2. If extraction succeeds, use create_invoice() to store the data
+    3. If user asks to see records, use get_ledger_data() to display them
+    4. Always handle errors gracefully and inform users of the result
+
+    Important Rules:
+    - Extract EXACT values from user text (don't make up data)
+    - Handle currency symbols and numbers correctly
+    - Return clear success/failure messages
+    - Use proper error handling for invalid data
+
+    Example 1:
+    User: "Amazon paid $40000 for 5 GPUs"
+    → extract_transaction_details("Amazon paid $40000 for 5 GPUs")
+    → create_invoice("Amazon", 40000.0, "GPUs", 5)
+    → "Successfully created invoice #123 for Amazon - $40,000 for 5 GPUs"
+
+    Example 2:
+    User: "Microsoft bought 10 laptops for $15000"
+    → extract_transaction_details("Microsoft bought 10 laptops for $15000")
+    → create_invoice("Microsoft", 15000.0, "laptops", 10)
+    → "Successfully created invoice #124 for Microsoft - $15,000 for 10 laptops"
+
+    Example 3:
+    User: "Show me all transactions"
+    → get_ledger_data()
+    → [Display formatted ledger table]
+    
+    """)
+    
+    return{
+        "messages": llm.invoke([sys_msg] + state["messages"]),
+        "text": state["text"],
+        "company_name": state["company_name"],
+        "amount_paid": state["amount_paid"],
+        "product_name": state["product_name"],
+        "num_units": state["num_units"],
+        "function_call_success": state["function_call_success"],
+        "error_message": state["error_message"],
+        "invoice_id": state["invoice_id"],
+        "invoice_success": state["invoice_success"]
+        
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#----------------------------Additional Functions--------------------------------------
 
 def display_ledger(): 
     """Print ledger table to console"""
@@ -126,8 +270,8 @@ async def chat_interface(graph):
 workflow = StateGraph(AgentState)
 
 # Add nodes to the graph
-workflow.add_node("extract_transaction_details", node_extract_transaction_details)
-workflow.add_node("create_invoice", node_create_invoice)
+workflow.add_node("extract_transaction_details", extract_transaction_details)
+workflow.add_node("create_invoice", create_invoice)
 workflow.add_node("END", lambda x: x)
 
 # Add edges to the graph
