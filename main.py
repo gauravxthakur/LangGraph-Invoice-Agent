@@ -155,8 +155,9 @@ async def assistant(state: AgentState):
     
     """)
     
+    llm_with_tools = llm.bind_tools(local_tools)
     return{
-        "messages": llm.invoke([sys_msg] + state["messages"]),
+        "messages": llm_with_tools.invoke([sys_msg] + state["messages"]),
         "text": state["text"],
         "company_name": state["company_name"],
         "amount_paid": state["amount_paid"],
@@ -169,8 +170,26 @@ async def assistant(state: AgentState):
         
     }
 
-
-
+#--------------------------------Build the Graph -----------------------------------------------------
+async def build_graph():
+    "Build the state graph with peoperly initialized tools and assistant function"
+    builder = StateGraph(AgentState)
+    
+    #----------------Nodes-------------------------
+    builder_add_node("assistant", assistant)
+    builder.add_node("tools", ToolNode(local_tools)) # ToolNode is the built-in automatic tool execution manager
+    
+    #----------------Edges-------------------------
+    builder.add_edge(START, "assistant") # Start with AI assistant
+    builder.add_conditional_edges(
+        "assistant",
+        tools_condition # Built-in LangGraph condition
+    )
+    builder.add_Edge("tools", "assistant") # After tools are executed, go back to assistant
+    
+    
+    app = builder.compile()
+    return app
 
 
 
@@ -265,22 +284,6 @@ async def chat_interface(graph):
              print(f"DATABASE FAILED: {final_state['error_message']}")
         
         print("\n")
-
-# Create a graph
-workflow = StateGraph(AgentState)
-
-# Add nodes to the graph
-workflow.add_node("extract_transaction_details", extract_transaction_details)
-workflow.add_node("create_invoice", create_invoice)
-workflow.add_node("END", lambda x: x)
-
-# Add edges to the graph
-workflow.set_entry_point("extract_transaction_details")
-workflow.add_edge("extract_transaction_details", "create_invoice")
-workflow.add_edge("create_invoice", "END")
-
-# Compile the graph
-graph = workflow.compile()
 
 # Draw the graph
 try:
