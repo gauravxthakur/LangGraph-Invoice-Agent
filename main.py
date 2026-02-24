@@ -176,7 +176,7 @@ async def build_graph():
     builder = StateGraph(AgentState)
     
     #----------------Nodes-------------------------
-    builder_add_node("assistant", assistant)
+    builder.add_node("assistant", assistant)
     builder.add_node("tools", ToolNode(local_tools)) # ToolNode is the built-in automatic tool execution manager
     
     #----------------Edges-------------------------
@@ -185,7 +185,7 @@ async def build_graph():
         "assistant",
         tools_condition # Built-in LangGraph condition
     )
-    builder.add_Edge("tools", "assistant") # After tools are executed, go back to assistant
+    builder.add_edge("tools", "assistant") # After tools are executed, go back to assistant
     
     
     app = builder.compile()
@@ -193,26 +193,9 @@ async def build_graph():
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #----------------------------Additional Functions--------------------------------------
 
-def display_ledger(): 
+def display_ledger():
     """Print ledger table to console"""
     try:
         conn = sqlite3.connect(DATABASE_FILE)
@@ -232,10 +215,7 @@ def display_ledger():
         if 'conn' in locals() and conn:
             conn.close()
 
-# Execute the LangGraph flow
-async def run_graph_flow(graph, initial_state: AgentState):
-    final_state = await graph.ainvoke(initial_state)
-    return final_state
+
 
 async def chat_interface(graph):
     # Initialize database
@@ -267,7 +247,7 @@ async def chat_interface(graph):
         }
         
         # 2. Execute the entire LangGraph workflow
-        final_state = await run_graph_flow(graph, initial_state)
+        final_state = await graph.ainvoke(initial_state)
         
         # 3. Process and display the final result
         print("\n--- Final Result ---")
@@ -277,6 +257,7 @@ async def chat_interface(graph):
             print(f"   Company: {final_state['company_name']}")
             print(f"   Amount: ${final_state['amount_paid']:,.2f}")
             print(f"   Product: {final_state['product_name']} ({final_state['num_units']} units)")
+            print(f"   Timestamp: {final_state['timestamp']}")
             display_ledger()
         elif not final_state["function_call_success"]:
              print(f"EXTRACTION FAILED: {final_state['error_message']}")
@@ -285,12 +266,11 @@ async def chat_interface(graph):
         
         print("\n")
 
-# Draw the graph
-try:
-    graph.get_graph(xray=True).draw_mermaid_png(output_file_path="graph.png")
-except Exception:
-    pass
 
-# Run the system
+
+#----------------------------------------RUN----------------------------------------------    
 if __name__ == "__main__":
-    asyncio.run(chat_interface(graph))
+    async def main():
+        graph = await build_graph()
+        await chat_interface(graph)
+    asyncio.run(main())
