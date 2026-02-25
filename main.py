@@ -14,6 +14,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from IPython.display import Image, display
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from tools import DATABASE_FILE, setup_database, extract_transaction_details, create_invoice, get_ledger_data
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
 load_dotenv()
 
