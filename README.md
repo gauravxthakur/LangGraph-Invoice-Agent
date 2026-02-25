@@ -8,3 +8,8 @@
 <img width="1201" height="827" alt="output1" src="https://github.com/user-attachments/assets/255f1db4-9b1d-4324-96fc-d4ca0f72b47d" />
 <img width="1345" height="922" alt="output2" src="https://github.com/user-attachments/assets/82f96ef2-16d7-4119-ab09-39a987985e6b" />
 <img width="1197" height="756" alt="output3" src="https://github.com/user-attachments/assets/4bdc819b-1601-4330-aead-c0653a1f07ce" />
+
+
+# RESOURCES
+LangGraph Redis https://github.com/redis-developer/langgraph-redis
+MongoDB MCP Server https://github.com/mongodb-js/mongodb-mcp-server
