@@ -61,68 +61,9 @@ local_tools = [
 #------------------------------------AI ASSISTANT---------------------------------------
 async def assistant(state: AgentState):
     
-    textual_description_of_tools = """
-    def setup_database():
-    
-    Initializes the SQLite database and creates the Ledger table for invoice storage.
-    
-    Creates a table with columns: id, company_name, amount_paid, product_name, 
-    num_units, and timestamp. Uses 'ledger_test.db' as the database file.
-    
-    Returns:
-        None: Prints setup confirmation message
-    
-    Note:
-        Table is created with IF NOT EXISTS to prevent errors on repeated calls.
-    
-    
-    -----------------------------------------------------------------------------------
-    
-    async def extract_transaction_details(text: str) -> dict:
-    Extracts transaction details from natural language text using a LLM.
-    
-    Args:
-        text (str): Natural language text to parse
-        
-    Returns:
-        dict: Extracted data with keys: company_name, amount_paid, 
-              product_name, num_units, success, error_message
-              
-    -----------------------------------------------------------------------------------
-    
-    async def create_invoice(company_name: str, amount_paid: float, 
-                         product_name: str, num_units: int) -> dict:
-    Creates and stores invoice record in SQLite database.
-    
-    Args:
-        company_name (str): Company name
-        amount_paid (float): Payment amount
-        product_name (str): Product description
-        num_units (int): Quantity purchased
-        
-    Returns: 
-    dict: {invoice_id: int, success: bool, error_message: str}
-        
-    -----------------------------------------------------------------------------------
-    def get_ledger_data(): 
-    Retrieves and formats all invoice records from the database.
-    
-    Queries the Ledger table and returns a formatted string containing
-    all transaction records sorted by timestamp (newest first).
-    
-    Returns:
-        str: Formatted ledger table with ID, company name, amount,
-             product, units, and timestamp for all records
-             
-    Note:
-        Prints formatted table directly to console for user display.
-    
-    """
-
     sys_msg = SystemMessage(content=f"""
     You are an intelligent Invoice Processing Assistant that helps users extract transaction details
-    from natural language and store them in a database,
-    with the help of following tools: {textual_description_of_tools}
+    from natural language and store them in a database.
 
     Your Workflow:
     1. When user provides transaction text, use extract_transaction_details() to parse it
