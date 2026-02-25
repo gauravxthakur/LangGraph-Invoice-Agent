@@ -188,7 +188,9 @@ async def build_graph():
     builder.add_edge("tools", "assistant") # After tools are executed, go back to assistant
     
     
-    app = builder.compile()
+    # Initialize Redis checkpointer
+    async with AsyncRedisSaver.from_conn_string("redis://localhost:6379") as checkpointer:
+        app = builder.compile(checkpointer=checkpointer) # Compile the graph
     
     # Generate PNG image of the graph
     image_data = app.get_graph().draw_mermaid_png()
@@ -237,7 +239,10 @@ async def chat_interface(graph):
         user_input = input("\nYou: ").strip()
         if user_input.lower() in ('exit', 'quit'):
             break
-            
+        
+        # This is what allows Redis to track distinct conversations
+        config = {"configurable": {"thread_id": "user_session_001"}}
+        
         # 1. Initialize the State object with user input
         initial_state: AgentState = {
             "messages": [HumanMessage(content=user_input)],
@@ -253,7 +258,7 @@ async def chat_interface(graph):
         }
         
         # 2. Execute the entire LangGraph workflow
-        final_state = await graph.ainvoke(initial_state)
+        final_state = await graph.ainvoke(initial_state, config=config)
         
         # 3. Process and display the final result
         print("\n--- Final Result ---")
