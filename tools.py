@@ -48,7 +48,7 @@ async def setup_database():
     """)
     conn.commit()
     conn.close()
-    print(f"[DB SETUP] Database '{DATABASE_FILE}' initialized and 'Ledger' table ready.")    
+    # print(f"[DB SETUP] Database '{DATABASE_FILE}' initialized and 'Ledger' table ready.")    
 
     
 
