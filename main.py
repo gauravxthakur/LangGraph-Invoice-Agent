@@ -142,30 +142,7 @@ async def build_graph():
 
 
 
-#----------------------------Additional Functions--------------------------------------
-
-def display_ledger():
-    """Print ledger table to console"""
-    try:
-        conn = sqlite3.connect(DATABASE_FILE)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Ledger ORDER BY timestamp DESC")
-        rows = cursor.fetchall()
-        
-        print("\n=== Current Ledger ===")
-        print("ID | Company Name        | Amount Paid | Product   | Units | Timestamp")
-        print("-" * 75)
-        for row in rows:
-            print(f"{row[0]:2} | {row[1]:<18} | ${row[2]:>9,.2f} | {row[3]:<8} | {row[4]:>5} | {row[5]}")
-        print("-" * 75)
-    except sqlite3.Error as e:
-        print(f"Error displaying ledger: {e}")
-    finally:
-        if 'conn' in locals() and conn:
-            conn.close()
-
-
-
+#---------------------------------------CHAT INTERFACE-----------------------------------------
 async def chat_interface(graph):
     # Initialize database
     await setup_database()
@@ -214,7 +191,6 @@ async def chat_interface(graph):
         final_state = await graph.ainvoke(initial_state, config=config)
         
         # 3. Process and display the final result
-        print("\n--- Final Result ---")
         print(final_state["messages"][-1].content)
         
         print("\n")
