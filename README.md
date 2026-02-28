@@ -37,3 +37,10 @@ REDIS_URL=redis://localhost:6379
 ```bash
 py main.py
 ```
+
+5. Connect to LangSmith (Optional but Recommended for Observability)
+```bash
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=your_langsmith_api_key_here
+LANGCHAIN_PROJECT=langgraph-invoice-agent
+```
