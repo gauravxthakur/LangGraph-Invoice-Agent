@@ -1,13 +1,13 @@
 # GRAPH
 ![graph image](image.png)
 
+
 # OUTPUT
 <img width="955" height="870" alt="Screenshot 2026-02-27 043850" src="https://github.com/user-attachments/assets/2e34833c-e511-4410-ab85-108309fc251b" />
 
 
 # RESOURCES
 LangGraph Redis https://github.com/redis-developer/langgraph-redis
-
 
 MongoDB MCP Server https://github.com/mongodb-js/mongodb-mcp-server
 
@@ -43,4 +43,6 @@ py main.py
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_API_KEY=your_langsmith_api_key_here
 LANGCHAIN_PROJECT=langgraph-invoice-agent
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 ```

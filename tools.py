@@ -9,6 +9,7 @@ from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage
 import sqlite3
 from langchain_core.prompts import PromptTemplate
 from typing import TypedDict, Optional
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -52,68 +53,42 @@ async def setup_database():
 
     
 
+#---------------------------------------------PYDANTIC SCHEMA-------------------------------------------------
+class TransactionDetails(BaseModel):
+    company_name: str = Field(description="The name of the company that made the purchase")
+    amount_paid: float = Field(description="The total amount paid")
+    product_name: str = Field(description="The name of the item or service bought")
+    num_units: int = Field(description="The quantity of the product purchased")
+
+
 #--------------------------------------------------------------------------------------------------------------------
     
 @tool
 async def extract_transaction_details(text: str) -> dict:
     """
-    Extracts transaction details from natural language text using a LLM.
-    
+    Extracts transaction details from text using structured LLM output.
+
     Args:
-        text (str): Natural language text to parse
-        
+        text (str): Input text containing transaction information.
+
     Returns:
-        dict: Extracted data with keys: company_name, amount_paid, 
-              product_name, num_units, success, error_message
+        dict: Structured transaction data with company_name, amount_paid, 
+        product_name, num_units, success status, and error handling.
     """
-
-    prompt = PromptTemplate(
-        input_variables=["text"],
-        template=(
-            "Extract these fields from the input text as STRICT JSON (no commentary):\n"
-            "- company_name (string)\n"
-            "- amount_paid (float)\n"
-            "- product_name (string)\n"
-            "- num_units (integer)\n\n"
-            "Text: {text}"
-        ),
-    )
-    message = HumanMessage(content=prompt.format(text=text))
-
+    
+    structured_llm = llm.with_structured_output(TransactionDetails)
+    
     try:
-        response = await llm.ainvoke([message])
-        result = str(response.content).strip()
-
-        # Handle fenced code blocks like ```json ... ``` or ``` ... ```
-        if result.startswith("```"):
-            parts = result.split("\n", 1)
-            result = parts[1] if len(parts) > 1 else ""
-            result = result.rsplit("\n", 1)[0] if "\n" in result else result
-
-        data = json.loads(result)
-
-        company_name = str(data.get("company_name", "")).strip()
-        product_name = str(data.get("product_name", "")).strip()
-
-        amount_raw = data.get("amount_paid", 0.0)
-        num_units_raw = data.get("num_units", 0)
-
-        amount_paid = float(amount_raw)
-        num_units = int(num_units_raw)
-
-        if not company_name:
-            raise ValueError("company_name is missing")
-
+        result = await structured_llm.ainvoke(text)
         return {
-            "company_name": company_name,
-            "amount_paid": amount_paid,
-            "product_name": product_name,
-            "num_units": num_units,
+            **result.model_dump(), # converts the Pydantic object into a clean Python dictionary
             "success": True,
             "function_call_success": True,
-            "error_message": None,
+            "error_message": None
         }
-    except json.JSONDecodeError as e:
+    except Exception as e:
+        # If the AI hallucinates a string where a float should be, 
+        # Pydantic catches it here instead of crashing the program.
         return {
             "company_name": "",
             "amount_paid": 0.0,
@@ -121,17 +96,7 @@ async def extract_transaction_details(text: str) -> dict:
             "num_units": 0,
             "success": False,
             "function_call_success": False,
-            "error_message": f"Invalid JSON from model: {e}",
-        }
-    except (ValueError, TypeError) as e:
-        return {
-            "company_name": "",
-            "amount_paid": 0.0,
-            "product_name": "",
-            "num_units": 0,
-            "success": False,
-            "function_call_success": False,
-            "error_message": f"Data validation error: {e}",
+            "error_message": f"Extraction failed: {str(e)}"
         }
 
 
@@ -223,8 +188,6 @@ def get_ledger_data():
             ledger_str += f"{row[0]:2} | {row[1]:<18} | ${row[2]:>9,.2f} | {row[3]:<8} | {row[4]:>5} | {row[5]}\n"
         ledger_str += "-" * 75 + "\n"
 
-        print(ledger_str)
-        
         return ledger_str
     except sqlite3.Error as e:
         return f"Error displaying ledger: {e}"
