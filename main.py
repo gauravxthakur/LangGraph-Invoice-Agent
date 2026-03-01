@@ -13,7 +13,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from IPython.display import Image, display
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from tools import DATABASE_FILE, setup_database, extract_transaction_details, create_invoice, get_ledger_data
+from tools import TransactionDetails, DATABASE_FILE, setup_database, extract_transaction_details, create_invoice, get_ledger_data
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
 load_dotenv()
@@ -45,17 +45,18 @@ class AgentState(TypedDict):
 #--------------------------------------------------------------------------------------------
 
 
-# Initialise the LLM
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
-
-
-
 #-------------------------------------TOOLS---------------------------------------------
 local_tools = [
     extract_transaction_details,
     create_invoice,
     get_ledger_data
 ]
+
+
+# Initialise the LLM
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+llm_with_tools = llm.bind_tools(local_tools)
+
 
 
 #------------------------------------AI ASSISTANT---------------------------------------
@@ -96,19 +97,10 @@ async def assistant(state: AgentState):
     
     """)
     
-    llm_with_tools = llm.bind_tools(local_tools)
+    response = await llm_with_tools.ainvoke([sys_msg] + state["messages"])
+    
     return{
-        "messages": [llm_with_tools.invoke([sys_msg] + state["messages"])],
-        "text": state["text"],
-        "company_name": state["company_name"],
-        "amount_paid": state["amount_paid"],
-        "product_name": state["product_name"],
-        "num_units": state["num_units"],
-        "function_call_success": state["function_call_success"],
-        "error_message": state["error_message"],
-        "invoice_id": state["invoice_id"],
-        "invoice_success": state["invoice_success"]
-        
+        "messages": [response],
     }
 
 #--------------------------------Build the Graph -----------------------------------------------------
@@ -175,16 +167,7 @@ async def chat_interface(graph):
         
         # 1. Initialize the State object with user input
         initial_state: AgentState = {
-            "messages": [HumanMessage(content=user_input)],
-            "text": user_input,
-            "company_name": "",
-            "amount_paid": 0.0,
-            "product_name": "",
-            "num_units": 0,
-            "function_call_success": None,
-            "error_message": None,
-            "invoice_id": None,
-            "invoice_success": None,
+            "messages": [HumanMessage(content=user_input)]
         }
         
         # 2. Execute the entire LangGraph workflow
@@ -195,11 +178,14 @@ async def chat_interface(graph):
         
         print("\n")
         
-        
-        
-#----------------------------------------RUN----------------------------------------------    
+    
+# ----------------------------------------RUN----------------------------------------------    
+async def run_app():
+    graph = await build_graph()
+    await chat_interface(graph)
+
 if __name__ == "__main__":
-    async def main():
-        graph = await build_graph()
-        await chat_interface(graph)
-    asyncio.run(main())
+    try:
+        asyncio.run(run_app())
+    except KeyboardInterrupt:
+        print("\nSession ended.")
