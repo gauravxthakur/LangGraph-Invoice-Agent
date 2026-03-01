@@ -53,12 +53,12 @@ async def setup_database():
 
     
 
-#---------------------------------------------PYDANTIC SCHEMA-------------------------------------------------
+#---------------------------------------------PYDANTIC SCHEMA-------------------------------------------------------
 class TransactionDetails(BaseModel):
     company_name: str = Field(description="The name of the company that made the purchase")
-    amount_paid: float = Field(description="The total amount paid")
+    amount_paid: float = Field(gt=0, description="The total amount paid") # gt=0 means "Greater Than 0"
     product_name: str = Field(description="The name of the item or service bought")
-    num_units: int = Field(description="The quantity of the product purchased")
+    num_units: int = Field(ge=1, description="The quantity of the product purchased") # ge=1 means "Greater Than or Equal To 1"
 
 
 #--------------------------------------------------------------------------------------------------------------------
