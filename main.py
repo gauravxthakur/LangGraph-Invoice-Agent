@@ -24,24 +24,7 @@ class AgentState(TypedDict):
     
     # Conversation History
     messages: Annotated[list[AnyMessage], add_messages]
-    
-    # Current Input
-    text: str
-    
-    # Extraction output
-    company_name: str
-    amount_paid: float
-    product_name: str
-    num_units: int
-    
-    # Status
-    function_call_success: Optional[bool]
-    error_message: Optional[str]
-    
-    # Database output
-    invoice_id: Optional[int]
-    invoice_success: Optional[bool]
-    
+ 
 #--------------------------------------------------------------------------------------------
 
 
