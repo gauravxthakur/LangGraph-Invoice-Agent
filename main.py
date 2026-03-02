@@ -37,7 +37,6 @@ local_tools = [
 
 # Initialise the LLM
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
-llm_with_tools = None
 
 
 # System Message
@@ -61,26 +60,24 @@ Examples:
 """)
 
 
-#------------------------------------AI ASSISTANT---------------------------------------
-async def assistant(state: AgentState):
-    
-    global llm_with_tools
-    
-    response = await llm_with_tools.ainvoke([sys_msg] + state["messages"])
-    
-    return{
-        "messages": [response],
-    }
-
 #--------------------------------Build the Graph -----------------------------------------------------
 async def build_graph():
     "Build the state graph with peoperly initialized tools and assistant function"
     
     builder = StateGraph(AgentState)
-    global llm_with_tools
     
     # 1. Setup Tools - Use local tools only
     llm_with_tools = llm.bind_tools(local_tools)
+    
+    #------------------------------------AI ASSISTANT---------------------------------------
+    async def assistant(state: AgentState):
+        
+        response = await llm_with_tools.ainvoke([sys_msg] + state["messages"])
+        
+        return{
+            "messages": [response],
+        }
+
     
     # 2. Nodes & Edges
     builder.add_node("assistant", assistant)
