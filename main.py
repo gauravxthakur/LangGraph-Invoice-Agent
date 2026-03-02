@@ -15,9 +15,11 @@ from IPython.display import Image, display
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from tools import TransactionDetails, DATABASE_FILE, setup_database, extract_transaction_details, create_invoice, get_ledger_data
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from mcp_manager import MCPManager
 
 load_dotenv()
 
+mcp_manager = MCPManager()
         
 # -----------------------------------STATE SCHEMA-------------------------------------------
 class AgentState(TypedDict):
@@ -38,16 +40,19 @@ local_tools = [
 
 # Initialise the LLM
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
-llm_with_tools = llm.bind_tools(local_tools)
+llm_with_tools = None
 
 
 
 #------------------------------------AI ASSISTANT---------------------------------------
 async def assistant(state: AgentState):
     
+    global llm_with_tools
+    
     sys_msg = SystemMessage(content=f"""
-    You are an intelligent Invoice Processing Assistant that helps users extract transaction details
-    from natural language and store them in a database.
+    You are an intelligent ERP Assistant. You have two main responsibilities:
+    1. INVOICE HELP: Use extract_transaction_details, create_invoice, and get_ledger_data for local SQLite tasks.
+    2. MONGODB HELP: You have access to a MongoDB instance. Use the MongoDB tools to query, insert, or manage documents as requested.
 
     Your Workflow:
     1. When user provides transaction text, use extract_transaction_details() to parse it
@@ -89,31 +94,34 @@ async def assistant(state: AgentState):
 #--------------------------------Build the Graph -----------------------------------------------------
 async def build_graph():
     "Build the state graph with peoperly initialized tools and assistant function"
+    
     builder = StateGraph(AgentState)
+    global llm_with_tools
     
-    #----------------Nodes-------------------------
+    # 1. Setup Tools
+    mongo_tools = await mcp_manager.connect_mongo()
+    all_tools = local_tools + mongo_tools
+    llm_with_tools = llm.bind_tools(all_tools)
+    
+    # 2. Nodes & Edges
     builder.add_node("assistant", assistant)
-    builder.add_node("tools", ToolNode(local_tools)) # ToolNode is the built-in automatic tool execution manager
+    builder.add_node("tools", ToolNode(all_tools))
+    builder.add_edge(START, "assistant")
+    builder.add_conditional_edges("assistant", tools_condition)
+    builder.add_edge("tools", "assistant")
     
-    #----------------Edges-------------------------
-    builder.add_edge(START, "assistant") # Start with AI assistant
-    builder.add_conditional_edges(
-        "assistant",
-        tools_condition # Built-in LangGraph condition
-    )
-    builder.add_edge("tools", "assistant") # After tools are executed, go back to assistant
+    # 3. Proper Redis checkpointer with context management
+    redis_url = "redis://localhost:6379"
+            
+    async with AsyncRedisSaver.from_conn_string(redis_url) as checkpointer:
+        app = builder.compile(checkpointer=checkpointer)
     
-    
-    # Initialize Redis checkpointer
-    async with AsyncRedisSaver.from_conn_string("redis://localhost:6379") as checkpointer:
-        app = builder.compile(checkpointer=checkpointer) # Compile the graph
-    
-    # Generate PNG image of the graph
-    image_data = app.get_graph().draw_mermaid_png()
-    with open("graph.png", "wb") as f:
-        f.write(image_data)
+        # Generate PNG image of the graph
+        image_data = app.get_graph().draw_mermaid_png()
+        with open("graph.png", "wb") as f:
+            f.write(image_data)
         
-    return app
+        return app
 
 
 
@@ -165,7 +173,12 @@ async def chat_interface(graph):
 # ----------------------------------------RUN----------------------------------------------    
 async def run_app():
     graph = await build_graph()
-    await chat_interface(graph)
+    try:
+        await chat_interface(graph)
+    finally:
+        # This ensures the MCP server connections are closed when you quit
+        await mcp_manager.disconnect_all()
+
 
 if __name__ == "__main__":
     try:
