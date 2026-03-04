@@ -61,7 +61,7 @@ Examples:
 
 
 #--------------------------------Build the Graph -----------------------------------------------------
-async def build_graph():
+async def build_graph(checkpointer):
     "Build the state graph with peoperly initialized tools and assistant function"
     
     builder = StateGraph(AgentState)
@@ -85,19 +85,16 @@ async def build_graph():
     builder.add_edge(START, "assistant")
     builder.add_conditional_edges("assistant", tools_condition)
     builder.add_edge("tools", "assistant")
+           
+
+    app = builder.compile(checkpointer=checkpointer)
     
-    # 3. Proper Redis checkpointer with context management
-    redis_url = "redis://localhost:6379"
-            
-    async with AsyncRedisSaver.from_conn_string(redis_url) as checkpointer:
-        app = builder.compile(checkpointer=checkpointer)
-    
-        # Generate PNG image of the graph
-        image_data = app.get_graph().draw_mermaid_png()
-        with open("graph.png", "wb") as f:
-            f.write(image_data)
+    # Generate PNG image of the graph
+    image_data = app.get_graph().draw_mermaid_png()
+    with open("graph.png", "wb") as f:
+        f.write(image_data)
         
-        return app
+    return app
 
 
 
@@ -161,11 +158,9 @@ async def chat_interface(graph):
     
 # ----------------------------------------RUN----------------------------------------------    
 async def run_app():
-    graph = await build_graph()
-    try:
-        await chat_interface(graph)
-    finally:
-        pass  # No MCP connections to clean up
+    checkpointer = AsyncRedisSaver.from_conn_string("redis://localhost:6379")
+    graph = await build_graph(checkpointer)
+    await chat_interface(graph)
 
 
 if __name__ == "__main__":
