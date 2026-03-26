@@ -1,5 +1,7 @@
-# BULWARK
-A specialized agentic system that bridges the gap between natural language input and structured ERP environments. By sitting between the user and the Odoo database, it ensures that every invoice, partner, and transaction is parsed, cross-referenced, and human-verified before reaching the ledger.
+<img width="975" height="302" alt="bulwark" src="https://github.com/user-attachments/assets/22cfaa1e-5f8a-4890-acae-ebe26445bd8c" />
+
+
+Bulwark is a specialized agentic system that bridges the gap between natural language input and structured ERP environments. By sitting between the user and the Odoo database, it ensures that every invoice, partner, and transaction is parsed, cross-referenced, and human-verified before reaching the ledger.
 
 ## CORE FEATURES
 Odoo Integration: Native communication with Odoo models (res.partner, account.move) using the XML-RPC protocol for searching, reading, and creating records.
@@ -43,14 +45,6 @@ Observability: LangSmith / DeepEval
 [ ] Multi-ERP Support: Abstracting the model layer to support ERPNext alongside Odoo.
 
 [ ] Complex Matching: Implementing 3-way matching between Invoices, Purchase Orders, and Inventory.
-
-
-## GRAPH
-![graph image](image.png)
-
-
-## AGENT
-<img width="955" height="870" alt="Screenshot 2026-02-27 043850" src="https://github.com/user-attachments/assets/2e34833c-e511-4410-ab85-108309fc251b" />
 
 
 ## RESOURCES
